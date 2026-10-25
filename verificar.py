@@ -7,6 +7,7 @@ import itertools
 import os
 import random
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,6 +15,7 @@ from parser_nl import Biblioteca, analizar_base, texto_formula, letras_de
 from tableau import Tableau, ArbolDemasiadoGrande, literal, formatear_asignacion
 
 resultados = []
+RUTA_TEMPORAL = os.path.join(tempfile.gettempdir(), "_verificar_biblioteca.json")
 
 
 def chequear(nombre, ok, detalle=""):
@@ -49,6 +51,11 @@ casos = [
     ("Si no llueve entonces voy al parque", "¬p → q"),
     ("Si hay sol o hace calor entonces voy a la alberca", "(p ∨ q) → r"),
     ("Apruebo sii estudio", "p ↔ q"),
+    ("La lámpara no funciona", "¬p"),
+    ("El caballero no usa la espada o la princesa huye", "¬p ∨ q"),
+    ("Si la princesa no se salva entonces el dragón gana", "¬p → q"),
+    ("Llueve y no hace frío", "p ∧ ¬q"),
+    ("No es de día", "¬p"),
 ]
 for frase, esperado in casos:
     b = Biblioteca()
@@ -67,6 +74,14 @@ chequear("«No voy a trabajar» se guarda como ¬p, no como átomo nuevo",
 b = Biblioteca()
 b.agregar("Comeré si y solo si la comida está buena\nSi comere entonces estoy feliz")
 chequear("«Comeré» y «comere» (con y sin acento) son el mismo átomo", len(b.atomos) == 3, f"{b.atomos}")
+
+b = Biblioteca()
+b.agregar("Si hay luz, entonces la lámpara funciona.\nHay luz.\nLa lámpara no funciona..")
+chequear("«La lámpara no funciona» es ¬(la lámpara funciona): no crea un átomo nuevo (caso de la captura)",
+         len(b.atomos) == 2 and texto_formula(b.reglas[2]["formula"]) == "¬q", f"{b.atomos}")
+b = Biblioteca()
+b.agregar("El dragón duerme\nEl dragón no duerme")
+chequear("«duerme» y «no duerme» comparten la misma letra", len(b.atomos) == 1, f"{b.atomos}")
 
 seccion("3. FRASES NO VÁLIDAS (no deben guardar nada)")
 for mala in ["Si llueve", "llueve y", "no", "si y solo si", "Si llueve entonces", "Hola mundo y"]:
@@ -88,9 +103,9 @@ chequear("segunda frase reutiliza «llueve» y «me quedo en casa» (YA EXISTÍA
 r3 = b.agregar("Si llueve entonces me quedo en casa")
 chequear("repetir una frase completa no duplica la regla (YA EXISTÍA)",
          list(r3.reglas.values()) == [False] and len(b.reglas) == 2)
-b.guardar("/tmp/_verificar_biblioteca.json")
+b.guardar(RUTA_TEMPORAL)
 c = Biblioteca()
-c.cargar("/tmp/_verificar_biblioteca.json")
+c.cargar(RUTA_TEMPORAL)
 chequear("guardar y cargar en JSON deja la misma biblioteca", c.atomos == b.atomos and c.reglas == b.reglas)
 b.eliminar_regla(1)
 chequear("al eliminar una regla se borran las variables que ya nadie usa",
@@ -115,6 +130,10 @@ chequear("agregar «la princesa NO se salva» vuelve inconsistente la base (toda
 
 base, t = correr("Si llueve entonces me mojo\nLlueve\nNo me mojo")
 chequear("modus ponens contradicho: p→q, p, ¬q se cierra", not t.satisfacible)
+
+base, t = correr("Si hay luz, entonces la lámpara funciona.\nHay luz.\nLa lámpara no funciona..")
+chequear("caso de la captura (luz → lámpara, hay luz, la lámpara no funciona): INSATISFACIBLE",
+         not t.satisfacible and len(base.atomos) == 2)
 
 base, t = correr("Llueve y no llueve")
 chequear("una contradicción sola (p ∧ ¬p) cierra todas sus ramas", not t.satisfacible)
@@ -199,6 +218,11 @@ try:
         chequear(f"tabla de verdad de {op}", all(OPERACIONES[op](*k) == v for k, v in tabla.items()))
 except ImportError:
     print("  (se omite: no está sistema_logica.py en la carpeta)")
+
+try:
+    os.remove(RUTA_TEMPORAL)
+except OSError:
+    pass
 
 # ============================================================
 total, buenas = len(resultados), sum(resultados)

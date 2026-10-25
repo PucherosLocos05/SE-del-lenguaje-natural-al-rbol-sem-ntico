@@ -53,6 +53,12 @@ def construir(texto):
         m = re.match(patron, texto)
         if m:
             return (op,) + tuple(construir(g.strip(" ,")) for g in m.groups())
+    # Negación dentro de la frase: «la lámpara no funciona» = ¬«la lámpara funciona»
+    # (el «no» al inicio ya lo resolvió el patrón "^no (.+)$" de arriba)
+    palabras = texto.split()
+    if len(palabras) > 1 and palabras.count("no") == 1:
+        positiva = " ".join(p for p in palabras if p != "no")
+        return ("not", ("txt", positiva))
     return ("txt", texto)
 
 
